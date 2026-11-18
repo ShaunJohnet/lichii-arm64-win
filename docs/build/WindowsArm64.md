@@ -15,6 +15,14 @@ build one:
   2.0.250303.1, and the link fails (`/failifmismatch: C++/WinRT version`) against the Windows SDK's
   newer copy used by `switch2_ble.cpp`. Configure downloads that version's `cppwinrt.exe` from
   NuGet (SHA-256 pinned) and generates matching headers from the installed SDK into the build tree.
+- `src/dynarmic/.../backend/arm64/a64_address_space.cpp`: under the MSVC ABI, `MemoryRead128`
+  returns its `Vector` through a pointer passed after `this`, not in x0 and x1, so the JIT's
+  trampolines pass it a stack slot. Without this a game crashes as soon as it runs.
+- `cpmfile.json`, `externals/ffmpeg/CMakeLists.txt`: Windows ARM64 uses
+  [ShaunJohnet/lichii-ffmpeg-av1](https://github.com/ShaunJohnet/lichii-ffmpeg-av1)
+  `9.0.2-av1-arm64-1`, crueter-ci's FFmpeg build with libdav1d 1.5.4 (NEON assembly) merged into
+  `avcodec.lib`. crueter-ci's own package has no AV1 decoder, so Switch 2 titles' AV1 movies
+  were black.
 
 Compile with **clang-cl**, as the Windows CI does. MSVC's `cl.exe` rejects dynarmic's ARM64 backend
 (`error C2719`, a 4096-byte-aligned parameter passed by value) and the x64-only `_umul128`.

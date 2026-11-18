@@ -88,6 +88,13 @@
         "repo": "Takoroka/ffmpeg-av1",
         "version": "9.0.2-av1-1"
     },
+    "ffmpeg-ci-av1-arm64": {
+        "ci": true,
+        "name": "ffmpeg",
+        "package": "FFmpeg",
+        "repo": "ShaunJohnet/lichii-ffmpeg-av1",
+        "version": "9.0.2-av1-arm64-1"
+    },
     "ffmpeg-ci-av1-mingw": {
         "ci": true,
         "name": "ffmpeg",

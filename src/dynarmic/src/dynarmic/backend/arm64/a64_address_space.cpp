@@ -195,6 +195,40 @@ static void* EmitExclusiveWriteCallTrampoline(oaknut::CodeGenerator& code, const
     return target;
 }
 
+// The MSVC C++ ABI returns a class from a member function through a pointer passed after `this`,
+// even on ARM64 where AAPCS64 returns a 16-byte aggregate in x0 and x1. MemoryRead128 then takes
+// the result pointer in x1 and vaddr in x2, so the trampolines give it a stack slot and load Q0
+// from it. Calling it the AAPCS64 way made it store the result through vaddr and crash.
+#if defined(_WIN32) && defined(_MSC_VER)
+constexpr bool member_vector_return_is_indirect = true;
+#else
+constexpr bool member_vector_return_is_indirect = false;
+#endif
+
+// Calls MemoryRead128 with this in x0 and vaddr in `vaddr`, leaving the result in Q0. The caller
+// has pushed its registers with at least 16 bytes of stack space at SP.
+static void EmitCallMemoryRead128(oaknut::CodeGenerator& code, oaknut::XReg vaddr, oaknut::Label& l_this, oaknut::Label& l_addr) {
+    using namespace oaknut::util;
+
+    if constexpr (member_vector_return_is_indirect) {
+        code.MOV(X2, vaddr);
+        code.MOV(X1, SP);
+        code.LDR(X0, l_this);
+        code.LDR(Xscratch0, l_addr);
+        code.BLR(Xscratch0);
+        code.LDR(Q0, SP);
+    } else {
+        if (vaddr.index() != 1) {
+            code.MOV(X1, vaddr);
+        }
+        code.LDR(X0, l_this);
+        code.LDR(Xscratch0, l_addr);
+        code.BLR(Xscratch0);
+        code.FMOV(D0, X0);
+        code.FMOV(V0.D()[1], X1);
+    }
+}
+
 static void* EmitRead128CallTrampoline(oaknut::CodeGenerator& code, A64::UserCallbacks* this_) {
     using namespace oaknut::util;
 
@@ -203,13 +237,9 @@ static void* EmitRead128CallTrampoline(oaknut::CodeGenerator& code, A64::UserCal
     oaknut::Label l_addr, l_this;
 
     void* target = code.xptr<void*>();
-    ABI_PushRegisters(code, (1ull << 29) | (1ull << 30), 0);
-    code.LDR(X0, l_this);
-    code.LDR(Xscratch0, l_addr);
-    code.BLR(Xscratch0);
-    code.FMOV(D0, X0);
-    code.FMOV(V0.D()[1], X1);
-    ABI_PopRegisters(code, (1ull << 29) | (1ull << 30), 0);
+    ABI_PushRegisters(code, (1ull << 29) | (1ull << 30), 16);
+    EmitCallMemoryRead128(code, X1, l_this, l_addr);
+    ABI_PopRegisters(code, (1ull << 29) | (1ull << 30), 16);
     code.RET();
 
     code.align(8);
@@ -231,14 +261,9 @@ static void* EmitWrappedRead128CallTrampoline(oaknut::CodeGenerator& code, A64::
     constexpr u64 save_regs = ABI_CALLER_SAVE & ~ToRegList(Q0);
 
     void* target = code.xptr<void*>();
-    ABI_PushRegisters(code, save_regs, 0);
-    code.LDR(X0, l_this);
-    code.MOV(X1, Xscratch0);
-    code.LDR(Xscratch0, l_addr);
-    code.BLR(Xscratch0);
-    code.FMOV(D0, X0);
-    code.FMOV(V0.D()[1], X1);
-    ABI_PopRegisters(code, save_regs, 0);
+    ABI_PushRegisters(code, save_regs, 16);
+    EmitCallMemoryRead128(code, Xscratch0, l_this, l_addr);
+    ABI_PopRegisters(code, save_regs, 16);
     code.RET();
 
     code.align(8);

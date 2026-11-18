@@ -3,6 +3,12 @@
 
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+// MSVC STL 14.51 sends the 12-byte StorageBufferAddr into its ARM64 vectorized std::find, which
+// only handles 1, 2, 4 and 8 byte elements and fails a static_assert. Use the scalar algorithms.
+#if defined(_MSC_VER) && defined(_M_ARM64) && !defined(_USE_STD_VECTOR_ALGORITHMS)
+#define _USE_STD_VECTOR_ALGORITHMS 0
+#endif
+
 #include <algorithm>
 #include <array>
 #include <bit>

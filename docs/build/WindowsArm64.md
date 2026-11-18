@@ -11,6 +11,10 @@ build one:
 - `src/shader_recompiler/ir_opt/global_memory_to_storage_buffer_pass.cpp`: MSVC STL 14.51 sends a
   12-byte struct into its ARM64 vectorized `std::find`, which fails a `static_assert`. This file
   uses the scalar algorithms on ARM64.
+- `src/input_common/CMakeLists.txt`: the bundled ARM64 Qt was compiled with C++/WinRT
+  2.0.250303.1, and the link fails (`/failifmismatch: C++/WinRT version`) against the Windows SDK's
+  newer copy used by `switch2_ble.cpp`. Configure downloads that version's `cppwinrt.exe` from
+  NuGet (SHA-256 pinned) and generates matching headers from the installed SDK into the build tree.
 
 Compile with **clang-cl**, as the Windows CI does. MSVC's `cl.exe` rejects dynarmic's ARM64 backend
 (`error C2719`, a 4096-byte-aligned parameter passed by value) and the x64-only `_umul128`.
@@ -82,5 +86,8 @@ step fails with `Test run of "moc" executable ... failed`.
 
 ## Status
 
-All targets compile with the cross build. The `/MD` change fixes the final link, which is being
-re-verified. The native ARM64 build and running the emulator on Snapdragon hardware are untested.
+The cross build produces an ARM64 `lichii.exe` (clang-cl 22.1.8, MSVC 14.51, Windows SDK
+10.0.26100). Qt is linked statically, so a package needs only `lichii.exe`, `nx2_switches.txt` and
+the ARM64 Visual C++ runtime DLLs from `VC\Redist\MSVC\<version>\arm64\Microsoft.VC145.CRT`.
+
+The native ARM64 build and running the emulator on Snapdragon hardware are untested.

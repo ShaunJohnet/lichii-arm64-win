@@ -95,6 +95,36 @@ else()
             drivers/switch2_ble.h)
         target_link_libraries(input_common PRIVATE WindowsApp)
         target_compile_definitions(input_common PRIVATE HAVE_SWITCH2_BLE)
+
+        # The bundled Windows ARM64 Qt was compiled with C++/WinRT 2.0.250303.1, and the link fails
+        # (/failifmismatch "C++/WinRT version") against objects that used the Windows SDK's own,
+        # newer copy. Generate headers of Qt's version from the installed SDK's metadata instead.
+        if (LICHII_USE_BUNDLED_QT AND ARCHITECTURE_arm64)
+            set(cppwinrt_version 2.0.250303.1)
+            set(cppwinrt_dir ${CMAKE_BINARY_DIR}/cppwinrt-${cppwinrt_version})
+            if (NOT EXISTS ${cppwinrt_dir}/include/winrt/base.h)
+                file(DOWNLOAD
+                    https://www.nuget.org/api/v2/package/Microsoft.Windows.CppWinRT/${cppwinrt_version}
+                    ${cppwinrt_dir}/cppwinrt.zip
+                    EXPECTED_HASH SHA256=955e3051b35db1c00177ed14ab6b7b995c3b32a53fdb6c184ea53b1dba66e439
+                    TLS_VERIFY ON)
+                file(ARCHIVE_EXTRACT INPUT ${cppwinrt_dir}/cppwinrt.zip DESTINATION ${cppwinrt_dir}/pkg
+                     PATTERNS bin/cppwinrt.exe)
+                # vcvarsall sets WindowsSDKVersion with a trailing backslash; "sdk" is the newest SDK.
+                string(REPLACE "\\" "" cppwinrt_sdk "$ENV{WindowsSDKVersion}")
+                if (NOT cppwinrt_sdk)
+                    set(cppwinrt_sdk sdk)
+                endif()
+                execute_process(
+                    COMMAND ${cppwinrt_dir}/pkg/bin/cppwinrt.exe -input ${cppwinrt_sdk}
+                            -output ${cppwinrt_dir}/include
+                    RESULT_VARIABLE cppwinrt_result)
+                if (NOT cppwinrt_result EQUAL 0 OR NOT EXISTS ${cppwinrt_dir}/include/winrt/base.h)
+                    message(FATAL_ERROR "cppwinrt ${cppwinrt_version} failed to generate headers from ${cppwinrt_sdk}")
+                endif()
+            endif()
+            target_include_directories(input_common BEFORE PRIVATE ${cppwinrt_dir}/include)
+        endif()
     endif()
 endif()
 

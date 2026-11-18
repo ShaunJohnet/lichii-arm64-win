@@ -1221,14 +1221,17 @@ std::pair<size_t, size_t> HostMemory::TrimZeroPages() const {
             zero_bytes += PageAlignment;
         }
     }
-    // The views behind each run of resident view pages are looked up under one lock, released
-    // before the pages are read: guest map, unmap and protect calls wait for one lookup at most,
-    // not for a lookup per page (about a million of them in a pass over 5 GB).
+    // The views behind each run of resident view pages (2 MiB at most) are looked up under one
+    // lock, released before the pages are read: guest map, unmap and protect calls wait for one
+    // short lookup at most, and a pass over 5 GB takes the lock a few thousand times instead of
+    // about a million.
+    constexpr size_t MaxRunPages = 512;
     std::sort(view_pages.begin(), view_pages.end());
     std::vector<Impl::BackingRun> runs;
     for (size_t i = 0; i < view_pages.size();) {
         size_t j = i + 1;
-        while (j < view_pages.size() && view_pages[j] == view_pages[j - 1] + PageAlignment) {
+        while (j < view_pages.size() && j - i < MaxRunPages &&
+               view_pages[j] == view_pages[j - 1] + PageAlignment) {
             ++j;
         }
         runs.clear();
